@@ -7,17 +7,18 @@ using PayStack.Net;
 
 namespace PaystackIntegration.Controllers
 {
+	[Route("api/[controller]")]
+	[ApiController]
 	public class PayController : Controller
 	{
-		[Route("api/[controller]")]
-		[ApiController]
-		public class PaymentController : ControllerBase
-		{
+		
+	
 			private readonly PayStackApi paystack;
 			private readonly string token;
 			private readonly IConfiguration _configuration;
 			private readonly AppDbContext _context;
-			public PaymentController(IConfiguration configuration, AppDbContext context)
+
+			public PayController(IConfiguration configuration, AppDbContext context)
 			{
 				_configuration = configuration;
 				_context = context;
@@ -85,5 +86,5 @@ namespace PaystackIntegration.Controllers
 				return rand.Next(100000000, 999999999);
 			}
 		}
-	}
+	
 }
