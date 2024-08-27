@@ -1,4 +1,7 @@
 
+using Microsoft.EntityFrameworkCore;
+using PaystackIntegration.Model;
+
 namespace PaystackIntegration
 {
 	public class Program
@@ -13,6 +16,11 @@ namespace PaystackIntegration
 			// Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 			builder.Services.AddEndpointsApiExplorer();
 			builder.Services.AddSwaggerGen();
+
+
+			builder.Services.AddDbContext<AppDbContext>(options =>
+			options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection") ?? string.Empty));
+
 
 			var app = builder.Build();
 

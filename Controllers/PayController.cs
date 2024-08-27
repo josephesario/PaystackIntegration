@@ -56,7 +56,7 @@ namespace PaystackIntegration.Controllers
 				CallbackUrl = "http://localhost:7293/payment/verify"
 			};
 
-			var response = _paystack.Transactions.Initialize(request);
+			var response = _paystack.Transactions.Initialize(request);	
 			if (response.Status)
 			{
 				var transaction = new Transaction
