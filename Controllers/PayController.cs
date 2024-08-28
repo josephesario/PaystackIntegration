@@ -6,12 +6,10 @@ using PayStack.Net;
 using System.Threading.Tasks;
 using System.Linq;
 using System;
+using Microsoft.Extensions.Configuration;
 
 namespace PaystackIntegration.Controllers
 {
-	/// <summary>
-	/// Controller for handling Paystack payment transactions.
-	/// </summary>
 	[Route("api/[controller]")]
 	[ApiController]
 	public class PayController : ControllerBase
@@ -21,11 +19,6 @@ namespace PaystackIntegration.Controllers
 		private readonly IConfiguration _configuration;
 		private readonly AppDbContext _context;
 
-		/// <summary>
-		/// Initializes a new instance of the <see cref="PayController"/> class.
-		/// </summary>
-		/// <param name="configuration">The application configuration.</param>
-		/// <param name="context">The database context.</param>
 		public PayController(IConfiguration configuration, AppDbContext context)
 		{
 			_configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
@@ -34,11 +27,6 @@ namespace PaystackIntegration.Controllers
 			_paystack = new PayStackApi(_token);
 		}
 
-		/// <summary>
-		/// Initiates a donation transaction with Paystack.
-		/// </summary>
-		/// <param name="model">The donation view model containing transaction details.</param>
-		/// <returns>An <see cref="IActionResult"/> representing the result of the operation.</returns>
 		[HttpPost("donate")]
 		public async Task<IActionResult> Donate(DonateViewModel model)
 		{
@@ -56,7 +44,7 @@ namespace PaystackIntegration.Controllers
 				CallbackUrl = "http://localhost:7293/payment/verify"
 			};
 
-			var response = _paystack.Transactions.Initialize(request);	
+			var response = _paystack.Transactions.Initialize(request);
 			if (response.Status)
 			{
 				var transaction = new Transaction
@@ -74,11 +62,6 @@ namespace PaystackIntegration.Controllers
 			return BadRequest(response.Message);
 		}
 
-		/// <summary>
-		/// Verifies the status of a transaction with Paystack.
-		/// </summary>
-		/// <param name="reference">The transaction reference to verify.</param>
-		/// <returns>An <see cref="IActionResult"/> representing the result of the operation.</returns>
 		[HttpGet("verify")]
 		public async Task<IActionResult> Verify(string reference)
 		{
@@ -106,10 +89,6 @@ namespace PaystackIntegration.Controllers
 			return BadRequest(response.Data.GatewayResponse);
 		}
 
-		/// <summary>
-		/// Retrieves all successful transactions.
-		/// </summary>
-		/// <returns>An <see cref="IActionResult"/> containing the list of successful transactions.</returns>
 		[HttpGet("getall")]
 		public async Task<IActionResult> GetAllSuccessfulTransactions()
 		{
@@ -120,14 +99,113 @@ namespace PaystackIntegration.Controllers
 			return Ok(transactions);
 		}
 
-		/// <summary>
-		/// Generates a unique transaction reference.
-		/// </summary>
-		/// <returns>A random integer representing the transaction reference.</returns>
+		[HttpGet("transactions/list")]
+		public async Task<IActionResult> ListTransactions(int perPage = 50, int page = 1)
+		{
+			var request = new HttpRequestMessage(HttpMethod.Get, $"https://api.paystack.co/transaction?perPage={perPage}&page={page}");
+			request.Headers.Add("Authorization", $"Bearer {_token}");
+			var response = await SendRequestAsync(request);
+			return Content(response, "application/json");
+		}
+
+		[HttpGet("transactions/{id}")]
+		public async Task<IActionResult> FetchTransaction(long id)
+		{
+			var request = new HttpRequestMessage(HttpMethod.Get, $"https://api.paystack.co/transaction/{id}");
+			request.Headers.Add("Authorization", $"Bearer {_token}");
+			var response = await SendRequestAsync(request);
+			return Content(response, "application/json");
+		}
+
+		[HttpPost("transactions/charge")]
+		public async Task<IActionResult> ChargeAuthorization([FromBody] ChargeAuthorizationModel model)
+		{
+			var request = new HttpRequestMessage(HttpMethod.Post, "https://api.paystack.co/transaction/charge_authorization")
+			{
+				Content = new StringContent(System.Text.Json.JsonSerializer.Serialize(new
+				{
+					amount = model.Amount,
+					email = model.Email,
+					authorization_code = model.AuthorizationCode
+				}), System.Text.Encoding.UTF8, "application/json")
+			};
+			request.Headers.Add("Authorization", $"Bearer {_token}");
+			var response = await SendRequestAsync(request);
+			return Content(response, "application/json");
+		}
+
+		[HttpGet("transactions/timeline/{id_or_reference}")]
+		public async Task<IActionResult> ViewTransactionTimeline(string id_or_reference)
+		{
+			var request = new HttpRequestMessage(HttpMethod.Get, $"https://api.paystack.co/transaction/timeline/{id_or_reference}");
+			request.Headers.Add("Authorization", $"Bearer {_token}");
+			var response = await SendRequestAsync(request);
+			return Content(response, "application/json");
+		}
+
+		[HttpGet("transactions/totals")]
+		public async Task<IActionResult> TransactionTotals()
+		{
+			var request = new HttpRequestMessage(HttpMethod.Get, "https://api.paystack.co/transaction/totals");
+			request.Headers.Add("Authorization", $"Bearer {_token}");
+			var response = await SendRequestAsync(request);
+			return Content(response, "application/json");
+		}
+
+		[HttpGet("transactions/export")]
+		public async Task<IActionResult> ExportTransactions([FromHeader]int perPage, [FromHeader] int page)
+		{
+			var request = new HttpRequestMessage(HttpMethod.Get, $"https://api.paystack.co/transaction/export?perPage={perPage}&page={page}");
+			request.Headers.Add("Authorization", $"Bearer {_token}");
+			var response = await SendRequestAsync(request);
+			return Content(response, "application/json");
+		}
+
+		[HttpPost("transactions/partial_debit")]
+		public async Task<IActionResult> PartialDebit([FromBody] PartialDebitModel model)
+		{
+			var request = new HttpRequestMessage(HttpMethod.Post, "https://api.paystack.co/transaction/partial_debit")
+			{
+				Content = new StringContent(System.Text.Json.JsonSerializer.Serialize(new
+				{
+					authorization_code = model.AuthorizationCode,
+					currency = model.Currency,
+					amount = model.Amount,
+					email = model.Email
+				}), System.Text.Encoding.UTF8, "application/json")
+			};
+			request.Headers.Add("Authorization", $"Bearer {_token}");
+			var response = await SendRequestAsync(request);
+			return Content(response, "application/json");
+		}
+
+		private async Task<string> SendRequestAsync(HttpRequestMessage request)
+		{
+			using var httpClient = new HttpClient();
+			var response = await httpClient.SendAsync(request);
+			response.EnsureSuccessStatusCode();
+			return await response.Content.ReadAsStringAsync();
+		}
+
 		private static int GenerateTransactionReference()
 		{
 			var random = new Random((int)DateTime.Now.Ticks);
 			return random.Next(100000000, 999999999);
 		}
+	}
+
+	public class ChargeAuthorizationModel
+	{
+		public string Email { get; set; } = string.Empty;
+		public string Amount { get; set; } = string.Empty;
+		public string AuthorizationCode { get; set; } = string.Empty;
+	}
+
+	public class PartialDebitModel
+	{
+		public string AuthorizationCode { get; set; } = string.Empty;
+		public string Currency { get; set; } = string.Empty;
+		public string Amount { get; set; } = string.Empty;
+		public string Email { get; set; } = string.Empty;
 	}
 }
